@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Messaging;
-using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -20,8 +19,9 @@ namespace RandomTest
             Task.Factory.StartNew(()=> {
                 while(true) try
                     {
-                        share1.In(random, Guid.NewGuid().ToString());
+                        share1.In(random, Guid.NewGuid().ToString()+" "+DateTime.Now);
                         share1.CntItem();
+                        Thread.Sleep(10);
                     }
                     catch { }
                     
@@ -30,6 +30,7 @@ namespace RandomTest
           
             //Console.WriteLine("complete data prepared: ");
             var start = new Stopwatch();
+            var startTime = DateTime.Now;
             start.Start();
 
             try
@@ -42,16 +43,14 @@ namespace RandomTest
                         Task.Factory.StartNew(() => { share1.PrintByMulti(random); });
                         Task.Factory.StartNew(() => { share1.PrintByMulti(random); });
                         Task.Factory.StartNew(() => { share1.PrintByMulti(random); });
-                        Task.Factory.StartNew(() => { share1.PrintByMulti(random); });
-                        Task.Factory.StartNew(() => { share1.PrintByMulti(random); });
-                        Task.Factory.StartNew(() => { share1.PrintByMulti(random); });
+                        Thread.Sleep(2);
                         Console.WriteLine("Do once");
                     }
                     catch(Exception ex)
                     {
 
                     }
-                  
+                    //if (share1.IsStop(startTime)) break;
                     //if (share1.CheckAllEmpty()) break;
                 }
 
@@ -62,6 +61,7 @@ namespace RandomTest
             }
             start.Stop();
             Console.WriteLine("Time: " + start.ElapsedMilliseconds);
+            Console.ReadLine();
         }
     }
     class ShareList
@@ -122,6 +122,13 @@ namespace RandomTest
 
             }
             
+        }
+        public bool IsStop(DateTime now)
+        {
+            var curr = DateTime.Now;
+            if (curr.Subtract(now).Hours >= 3)
+                return true;
+            else return false;
         }
         public bool CheckAllEmpty()
         {
