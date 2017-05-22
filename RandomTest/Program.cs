@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Messaging;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -9,59 +12,60 @@ namespace RandomTest
 {
     class Program
     {
-
         static void Main(string[] args)
         {
+            for (var i = 0; i < 10; i++)
+            {try
+                {
+                    var timeConsume = TestConsume();
+                    using (var w = new StreamWriter("consume_normal.txt", true, Encoding.UTF8))
+                    {
+                        w.WriteLine(timeConsume);
+                    }
+                }catch(Exception ex)
+                {
+
+                }
+              
+            }
+            Console.WriteLine("process end");
+            Console.ReadLine();
+        }
+        static long TestConsume()
+        {
+            var recordNumber = 1000000;
             var random = new RandomTestDist();
             var share1 = new ShareList();
-            for (var i = 0; i <= 10000; i++)
-                share1.In(random, Guid.NewGuid().ToString());
-            Task.Factory.StartNew(()=> {
-                while(true) try
-                    {
-                        share1.In(random, Guid.NewGuid().ToString()+" "+DateTime.Now);
-                        share1.CntItem();
-                        Thread.Sleep(10);
-                    }
-                    catch { }
-                    
-                //share1.CntItem();
+            //for (var i = 0; i < 10000; i++)
+            //    share1.In(random, Guid.NewGuid().ToString());
+            var task=Task.Factory.StartNew(() => {
+                while (recordNumber-- > 0)
+                {
+                    share1.In(random, Guid.NewGuid().ToString() + " " + DateTime.Now);
+                    //share1.CntItem();
+                    //Thread.Sleep(10);
+                }
             });
-          
+            task.Wait();
             //Console.WriteLine("complete data prepared: ");
             var start = new Stopwatch();
             var startTime = DateTime.Now;
             start.Start();
 
-            try
-            {
-                while (true)
-                {
-                    try
-                    {
-                        //Task.Factory.StartNew(()=>share1.PrintAll(random));
-                        Task.Factory.StartNew(() => { share1.PrintByMulti(random); });
-                        Task.Factory.StartNew(() => { share1.PrintByMulti(random); });
-                        Task.Factory.StartNew(() => { share1.PrintByMulti(random); });
-                        Thread.Sleep(2);
-                        Console.WriteLine("Do once");
-                    }
-                    catch(Exception ex)
-                    {
 
-                    }
-                    //if (share1.IsStop(startTime)) break;
-                    //if (share1.CheckAllEmpty()) break;
-                }
-
-            }
-            catch (Exception ex)
+            while (true)
             {
-                Console.WriteLine(ex.Message);
+                //Task.Factory.StartNew(()=>share1.PrintAll(random));
+                Task.Factory.StartNew(() => { share1.PrintByMulti(random); });
+                Task.Factory.StartNew(() => { share1.PrintByMulti(random); });
+                Task.Factory.StartNew(() => { share1.PrintByMulti(random); });
+                //Thread.Sleep(1);
+                Console.WriteLine("Do once");
+                //if (share1.IsStop(startTime)) break;
+                if (share1.CheckAllEmpty()) break;
             }
             start.Stop();
-            Console.WriteLine("Time: " + start.ElapsedMilliseconds);
-            Console.ReadLine();
+            return start.ElapsedMilliseconds;
         }
     }
     class ShareList
@@ -71,7 +75,7 @@ namespace RandomTest
 
         public void In(RandomTestDist random, string value)
         {
-            var number = random.GetQueueNumber(DateTime.Now.Millisecond+100);
+            var number = random.GetQueueNumber();
             if (!_shareQueue.ContainsKey(number))
                 _shareQueue.Add(number, new List<string>());
             _shareQueue[number].Add(value);
@@ -94,7 +98,8 @@ namespace RandomTest
 
         public void PrintAll(RandomTestDist random)
         {
-            var number = random.GetQueueNumber(100+DateTime.Now.Second);
+            var number = random.GetQueueNumber();
+            if (!_shareQueue.ContainsKey(number)) return;
             var list = _shareQueue[number];
             if (list.Count == 0) return;
             var value = list[list.Count - 1];
@@ -103,23 +108,26 @@ namespace RandomTest
         }
         public void PrintByMulti(RandomTestDist random)
         {
-            //while (true)
+            var number = random.GetQueueNumber();
             try
             {
-                var number = random.GetQueueNumber(100+ DateTime.Now.Second);
-                if (_shareQueue.ContainsKey(number)){
+                if (_shareQueue.ContainsKey(number))
+                {
                     var list = _shareQueue[number];
                     if (list.Count == 0) return;
                     var value = list[list.Count - 1];
                     list.RemoveAt(list.Count - 1);
-                    Console.WriteLine(value);
+                    //Console.WriteLine(value);
                 }
 
                 //RecordInMQ(value);
             }
-            catch
+            catch(Exception ex)
             {
-
+                //using (var w=new StreamWriter(number+"_clash.txt", true, Encoding.UTF8))
+                //{
+                //    w.WriteLine(1);
+                //}
             }
             
         }
@@ -170,20 +178,17 @@ namespace RandomTest
         private const int begin = 0;
         private const int end = 10;
         private IDictionary<int, int> _statics = new Dictionary<int, int>();
-        private Random random = new Random(DateTime.Now.Second);
+        RNGCryptoServiceProvider csp = new RNGCryptoServiceProvider();
+        Random random = null;
 
-        public int GetQueueNumber(int seed= 12)
+        public int GetQueueNumber()
         {
-            try
-            {
-                random = new Random(seed);
-                return random.Next(begin, end);
-            }
-            catch
-            {
-                return 0;
-            }
-           
+            byte[] byteCsp = new byte[10];
+            csp.GetBytes(byteCsp);
+            var seed = BitConverter.ToInt32(byteCsp, 0);
+            random = new Random(seed);
+            
+            return random.Next(begin, end);
         }
 
         public void CountItem()
